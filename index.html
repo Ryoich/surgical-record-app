@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f766e">
+<title>手術記録</title>
+<style>
+  :root {
+    --bg: #f5f7f8; --card: #fff; --text: #1f2933; --muted: #6b7280;
+    --primary: #0f766e; --primary-light: #ccfbf1; --danger: #b91c1c; --border: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111827; --card: #1f2937; --text: #f3f4f6; --muted: #9ca3af;
+            --primary: #2dd4bf; --primary-light: #134e4a; --border: #374151; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+         background: var(--bg); color: var(--text); padding-bottom: env(safe-area-inset-bottom); }
+  header { background: var(--primary); color: #fff; padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top));
+           position: sticky; top: 0; z-index: 10; }
+  header h1 { margin: 0; font-size: 1.15rem; }
+  nav { display: flex; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 48px; z-index: 9; }
+  nav button { flex: 1; padding: 12px; border: none; background: none; color: var(--muted); font-size: .95rem; border-bottom: 3px solid transparent; }
+  nav button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input, select, textarea { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid var(--border);
+                            border-radius: 8px; background: var(--bg); color: var(--text); }
+  textarea { min-height: 60px; resize: vertical; }
+  .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .roles input { display: none; }
+  .roles span { display: block; text-align: center; padding: 10px 4px; border: 1px solid var(--border);
+                border-radius: 8px; font-size: .9rem; cursor: pointer; }
+  .roles input:checked + span { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 140px; overflow-y: auto; }
+  .chips:empty { display: none; }
+  .chip { padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg);
+          color: var(--text); font-size: .85rem; cursor: pointer; }
+  .chip.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .chip small { color: var(--muted); margin-left: 4px; }
+  .chip.selected small { color: inherit; }
+  .btn { display: inline-block; padding: 12px 16px; border: none; border-radius: 8px; font-size: 1rem;
+         background: var(--primary); color: #fff; cursor: pointer; }
+  .btn.secondary { background: var(--primary-light); color: var(--text); }
+  .btn.danger { background: var(--danger); }
+  .btn.block { width: 100%; margin-top: 16px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .record { display: flex; justify-content: space-between; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .record:last-child { border-bottom: none; }
+  .record .main { font-weight: 600; }
+  .record .sub { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+  .badge { flex-shrink: 0; align-self: center; padding: 4px 10px; border-radius: 999px; font-size: .8rem;
+           background: var(--primary-light); color: var(--text); white-space: nowrap; }
+  .badge.r0 { background: var(--primary); color: #fff; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { text-align: center; padding: 10px 4px; background: var(--bg); border-radius: 8px; }
+  .stat .n { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+  .stat .l { font-size: .75rem; color: var(--muted); }
+  /* 列幅を固定し、どの表でも同じ位置に同じ列が並ぶようにする */
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; table-layout: fixed; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 2px; border-bottom: 1px solid var(--border); text-align: center; }
+  th { font-size: .7rem; font-weight: 600; color: var(--muted); }
+  th:first-child, td:first-child { text-align: left; width: 36%; overflow-wrap: anywhere; }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
+  .hidden { display: none; }
+  .note { font-size: .8rem; color: var(--muted); }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: #fff;
+           padding: 10px 18px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .9; }
+</style>
+</head>
+<body>
+<header><h1>手術記録</h1></header>
+<nav>
+  <button data-tab="form" class="active">記録</button>
+  <button data-tab="list">一覧</button>
+  <button data-tab="stats">集計</button>
+  <button data-tab="data">データ</button>
+</nav>
+
+<main>
+  <!-- 記録フォーム -->
+  <section id="tab-form">
+    <form id="record-form" class="card">
+      <input type="hidden" id="f-id">
+      <label for="f-date">手術日</label>
+      <input type="date" id="f-date" required>
+
+      <label>診療科</label>
+      <div class="roles" id="f-depts" style="grid-template-columns: repeat(2, 1fr)"></div>
+
+      <label for="f-disease">疾患</label>
+      <input id="f-disease" list="dl-disease" placeholder="例: 急性虫垂炎（下の経験済み疾患から選択も可）" required>
+      <div class="chips" id="disease-chips"></div>
+
+      <label for="f-procedure">術式（複数選択可）</label>
+      <div class="row">
+        <input id="f-procedure" list="dl-procedure" placeholder="新しい術式を入力 / 下から選択" style="flex:3">
+        <button type="button" class="btn secondary" id="add-procedure" style="flex:1">追加</button>
+      </div>
+      <div class="chips" id="procedure-chips"></div>
+
+      <label>到達法（任意・複数選択可。移行時は実施順にタップ）</label>
+      <div class="roles" id="f-approaches"></div>
+      <p class="note" id="approach-order"></p>
+
+      <label>立場</label>
+      <div class="roles" id="f-roles"></div>
+
+      <label for="f-memo">メモ（任意）</label>
+      <textarea id="f-memo" placeholder="学んだこと・担当した手技など"></textarea>
+      <p class="note">※ 患者氏名・ID などの個人情報は入力しないでください。</p>
+
+      <button type="submit" class="btn block" id="f-submit">保存</button>
+      <div class="row hidden" id="edit-actions" style="margin-top:8px">
+        <button type="button" class="btn secondary" id="f-cancel">キャンセル</button>
+        <button type="button" class="btn danger" id="f-delete">削除</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- 一覧 -->
+  <section id="tab-list" class="hidden">
+    <div class="card">
+      <input id="search" placeholder="術式・疾患・診療科で検索">
+      <div class="row" style="margin-top:8px">
+        <select id="filter-role"><option value="">すべての立場</option></select>
+      </div>
+    </div>
+    <div class="card" id="record-list"></div>
+  </section>
+
+  <!-- 集計 -->
+  <section id="tab-stats" class="hidden">
+    <div class="card">
+      <div class="roles" id="period-modes"></div>
+      <select id="period-select" class="hidden" style="margin-top:8px"></select>
+    </div>
+    <div class="card hidden" id="period-trend-card">
+      <h2 id="period-trend-title"></h2>
+      <div id="period-trend"></div>
+    </div>
+    <div class="card">
+      <h2>立場別件数 <span class="note" id="total-count"></span></h2>
+      <div class="stats-grid" id="role-stats"></div>
+    </div>
+    <div class="card">
+      <h2>術式別</h2>
+      <div id="procedure-stats"></div>
+    </div>
+    <div class="card">
+      <h2>到達法別</h2>
+      <div id="approach-stats"></div>
+    </div>
+    <div class="card">
+      <h2>診療科別</h2>
+      <div id="dept-stats"></div>
+    </div>
+  </section>
+
+  <!-- データ管理 -->
+  <section id="tab-data" class="hidden">
+    <div class="card">
+      <h2>エクスポート</h2>
+      <p class="note">データはこの端末のブラウザ内にのみ保存されます。定期的にバックアップしてください。</p>
+      <div class="row">
+        <button class="btn" id="export-csv">CSV（Excel用）</button>
+        <button class="btn secondary" id="export-json">バックアップ(JSON)</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>インポート</h2>
+      <p class="note">バックアップ(JSON)から復元します。既存データと同じIDの記録は上書きされます。</p>
+      <input type="file" id="import-file" accept=".json,application/json">
+    </div>
+  </section>
+</main>
+
+<datalist id="dl-disease"></datalist>
+<datalist id="dl-procedure"></datalist>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'surgical-records-v1';
+const ROLES = ['執刀医', '第1助手', '第2助手', '第3助手', '見学', 'その他'];
+// 集計表の見出し用の略称（スマホ幅で折り返さないように）
+const ROLE_SHORT = { 執刀医: '執刀', 第1助手: '1助', 第2助手: '2助', 第3助手: '3助', 見学: '見学', その他: '他' };
+const DEPTS = ['外科', '小児外科'];
+const APPROACHES = ['開腹', '腹腔鏡', 'ロボット'];
+
+const $ = (id) => document.getElementById(id);
+// 旧形式（術式・到達法が単一の文字列）の記録を配列形式に変換する
+function normalize(r) {
+  if (!r.procedures) r.procedures = r.procedure ? [r.procedure] : [];
+  if (!r.approaches) r.approaches = r.approach ? [r.approach] : [];
+  delete r.procedure;
+  delete r.approach;
+  return r;
+}
+const load = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').map(normalize);
+const save = (records) => localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD (local)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let records = load();
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+// --- タブ切り替え ---
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('hidden', s.id !== `tab-${name}`));
+  if (name === 'list') renderList();
+  if (name === 'stats') renderStats();
+}
+document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// --- フォーム ---
+$('f-roles').innerHTML = ROLES.map((r, i) =>
+  `<label style="margin:0"><input type="radio" name="role" value="${r}" ${i === 0 ? 'checked' : ''}><span>${r}</span></label>`
+).join('');
+$('f-depts').innerHTML = DEPTS.map((d) =>
+  `<label style="margin:0"><input type="radio" name="dept" value="${d}" required><span>${d}</span></label>`
+).join('');
+const setDept = (dept) =>
+  document.querySelectorAll('input[name=dept]').forEach((el) => (el.checked = el.value === dept));
+
+// 到達法は複数選択可。移行（腹腔鏡→開腹など）を表せるよう、タップした順に保持する
+let selectedApproaches = [];
+$('f-approaches').innerHTML = APPROACHES.map((a) =>
+  `<label style="margin:0"><input type="checkbox" name="approach" value="${a}"><span>${a}</span></label>`
+).join('');
+function setApproaches(list) {
+  selectedApproaches = [...list];
+  document.querySelectorAll('input[name=approach]').forEach((el) => (el.checked = list.includes(el.value)));
+  renderApproachOrder();
+}
+function renderApproachOrder() {
+  $('approach-order').textContent = selectedApproaches.length > 1 ? `記録順: ${selectedApproaches.join(' → ')}` : '';
+}
+$('f-approaches').addEventListener('change', (e) => {
+  const v = e.target.value;
+  selectedApproaches = e.target.checked
+    ? [...selectedApproaches, v]
+    : selectedApproaches.filter((a) => a !== v);
+  renderApproachOrder();
+});
+$('filter-role').innerHTML += ROLES.map((r) => `<option>${r}</option>`).join('');
+
+// 術式は複数選択可
+let selectedProcedures = [];
+function addProcedure() {
+  const v = $('f-procedure').value.trim();
+  if (v && !selectedProcedures.includes(v)) selectedProcedures.push(v);
+  $('f-procedure').value = '';
+  renderAllChips();
+}
+$('add-procedure').addEventListener('click', addProcedure);
+$('f-procedure').addEventListener('keydown', (e) => {
+  // Enter でフォーム送信せず、入力中の術式を追加する
+  if (e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault();
+    addProcedure();
+  }
+});
+
+function refreshSuggestions() {
+  const fill = (id, field) => {
+    const values = [...new Set(records.flatMap(field.valuesOf))].sort();
+    $(id).innerHTML = values.map((v) => `<option value="${esc(v)}">`).join('');
+  };
+  fill('dl-disease', CHIP_FIELDS[0]);
+  fill('dl-procedure', CHIP_FIELDS[1]);
+  renderAllChips();
+}
+
+// 経験済みの疾患・術式をボタンで表示（選択中の診療科のもの・件数の多い順、入力中の文字で絞り込み）
+const CHIP_FIELDS = [
+  {
+    inputId: 'f-disease', chipsId: 'disease-chips',
+    valuesOf: (r) => (r.disease ? [r.disease] : []),
+    selected: () => [$('f-disease').value.trim()].filter(Boolean),
+    // 単一選択: 選択中のものをもう一度タップすると入力を消して一覧を全表示に戻す
+    toggle: (v) => ($('f-disease').value = $('f-disease').value.trim() === v ? '' : v),
+  },
+  {
+    inputId: 'f-procedure', chipsId: 'procedure-chips',
+    valuesOf: (r) => r.procedures || [],
+    selected: () => selectedProcedures,
+    toggle: (v) => {
+      selectedProcedures = selectedProcedures.includes(v)
+        ? selectedProcedures.filter((p) => p !== v)
+        : [...selectedProcedures, v];
+    },
+  },
+];
+
+function renderChips(field) {
+  const dept = document.querySelector('input[name=dept]:checked')?.value;
+  const query = $(field.inputId).value.trim().toLowerCase();
+  const selected = field.selected();
+  const counts = {};
+  records.filter((r) => !dept || r.dept === dept)
+    .forEach((r) => field.valuesOf(r).forEach((v) => (counts[v] = (counts[v] || 0) + 1)));
+  // 新規入力で選択したもの（まだ履歴にないもの）も表示する
+  selected.forEach((v) => (counts[v] ??= 0));
+  const items = Object.entries(counts)
+    .filter(([v]) => selected.includes(v) || !query || v.toLowerCase().includes(query))
+    .sort((a, b) => selected.includes(b[0]) - selected.includes(a[0]) || b[1] - a[1] || a[0].localeCompare(b[0], 'ja'));
+  $(field.chipsId).innerHTML = items.map(([v, n]) =>
+    `<button type="button" class="chip ${selected.includes(v) ? 'selected' : ''}" data-value="${esc(v)}">${esc(v)}${n ? `<small>${n}</small>` : ''}</button>`
+  ).join('');
+}
+const renderAllChips = () => CHIP_FIELDS.forEach(renderChips);
+
+CHIP_FIELDS.forEach((field) => {
+  $(field.chipsId).addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    field.toggle(chip.dataset.value);
+    renderChips(field);
+  });
+  $(field.inputId).addEventListener('input', () => renderChips(field));
+});
+$('f-depts').addEventListener('change', renderAllChips);
+
+function resetForm() {
+  $('record-form').reset();
+  $('f-id').value = '';
+  $('f-date').value = today();
+  // 診療科は直前の記録を引き継ぐ（同じクール中は同じ科が続くため）
+  setDept(DEPTS.includes(records[0]?.dept) ? records[0].dept : DEPTS[0]);
+  setApproaches([]);
+  selectedProcedures = [];
+  $('f-submit').textContent = '保存';
+  $('edit-actions').classList.add('hidden');
+  renderAllChips();
+}
+
+function editRecord(id) {
+  const r = records.find((x) => x.id === id);
+  if (!r) return;
+  $('f-id').value = r.id;
+  $('f-date').value = r.date;
+  setDept(r.dept);
+  setApproaches(r.approaches || []);
+  $('f-disease').value = r.disease;
+  $('f-procedure').value = '';
+  selectedProcedures = [...(r.procedures || [])];
+  renderAllChips();
+  $('f-memo').value = r.memo || '';
+  document.querySelectorAll('input[name=role]').forEach((el) => (el.checked = el.value === r.role));
+  $('f-submit').textContent = '更新';
+  $('edit-actions').classList.remove('hidden');
+  showTab('form');
+  window.scrollTo(0, 0);
+}
+
+function sortRecords() {
+  records.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+}
+
+$('record-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  // 入力欄に残っている術式は追加し忘れとみなして含める
+  if ($('f-procedure').value.trim()) addProcedure();
+  if (!selectedProcedures.length) {
+    toast('術式を入力または選択してください');
+    $('f-procedure').focus();
+    return;
+  }
+  const id = $('f-id').value;
+  const data = {
+    date: $('f-date').value,
+    dept: document.querySelector('input[name=dept]:checked').value,
+    disease: $('f-disease').value.trim(),
+    procedures: [...selectedProcedures],
+    approaches: [...selectedApproaches],
+    role: document.querySelector('input[name=role]:checked').value,
+    memo: $('f-memo').value.trim(),
+  };
+  if (id) {
+    Object.assign(records.find((r) => r.id === id), data);
+    toast('更新しました');
+  } else {
+    records.push({ id: crypto.randomUUID(), createdAt: Date.now(), ...data });
+    toast('保存しました');
+  }
+  sortRecords();
+  save(records);
+  refreshSuggestions();
+  resetForm();
+  if (id) showTab('list');
+});
+
+$('f-cancel').addEventListener('click', () => { resetForm(); showTab('list'); });
+$('f-delete').addEventListener('click', () => {
+  // confirm() はブラウザ標準ダイアログ。誤操作防止のため使用
+  if (!confirm('この記録を削除しますか？')) return;
+  records = records.filter((r) => r.id !== $('f-id').value);
+  save(records);
+  refreshSuggestions();
+  resetForm();
+  toast('削除しました');
+  showTab('list');
+});
+
+// --- 一覧 ---
+const procedureText = (r) => (r.procedures || []).join('、');
+const approachText = (r) => (r.approaches || []).join('→');
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const role = $('filter-role').value;
+  const filtered = records.filter((r) =>
+    (!role || r.role === role) &&
+    (!q || [procedureText(r), r.disease, r.dept, approachText(r), r.memo].some((v) => (v || '').toLowerCase().includes(q)))
+  );
+  $('record-list').innerHTML = filtered.length
+    ? filtered.map((r) => `
+      <div class="record" data-id="${r.id}">
+        <div>
+          <div class="main">${esc(procedureText(r))}</div>
+          <div class="sub">${esc(r.date)}${r.dept ? ' ・ ' + esc(r.dept) : ''}${approachText(r) ? ' ・ ' + esc(approachText(r)) : ''} ・ ${esc(r.disease)}</div>
+        </div>
+        <span class="badge ${r.role === '執刀医' ? 'r0' : ''}">${esc(r.role)}</span>
+      </div>`).join('')
+    : '<div class="empty">記録がありません</div>';
+}
+$('record-list').addEventListener('click', (e) => {
+  const el = e.target.closest('.record');
+  if (el) editRecord(el.dataset.id);
+});
+$('search').addEventListener('input', renderList);
+$('filter-role').addEventListener('change', renderList);
+
+// --- 集計 ---
+// keysOf は1件の記録が属する行のリストを返す（複数術式の記録はそれぞれの術式に1件ずつ数える）
+function crossTable(list, keysOf, sortRows = (a, b) => sum(b[1]) - sum(a[1]), labelOf = (k) => k) {
+  const map = {};
+  list.forEach((r) => {
+    const keys = keysOf(r).filter(Boolean);
+    (keys.length ? keys : ['（未入力）']).forEach((k) => {
+      map[k] ??= Object.fromEntries(ROLES.map((x) => [x, 0]));
+      map[k][r.role]++;
+    });
+  });
+  const rows = Object.entries(map).sort(sortRows);
+  if (!rows.length) return '<div class="empty">記録がありません</div>';
+  // 列は全記録で使われている立場に揃える（表ごとに列が変わらないように）
+  const usedRoles = ROLES.filter((role) => records.some((r) => r.role === role));
+  return `<table>
+    <tr><th></th>${usedRoles.map((r) => `<th>${ROLE_SHORT[r]}</th>`).join('')}<th>計</th></tr>
+    ${rows.map(([name, c]) => `<tr><td>${esc(labelOf(name))}</td>${usedRoles.map((r) => `<td>${c[r] || ''}</td>`).join('')}<td><b>${sum(c)}</b></td></tr>`).join('')}
+  </table>`;
+}
+const sum = (obj) => Object.values(obj).reduce((a, b) => a + b, 0);
+
+// --- 期間 ---
+// 週は金曜始まり〜木曜まで（金曜の研修発表に合わせる）。キーは週の開始日（YYYY-MM-DD）
+const WEEK_START_DAY = 5; // 0=日, 1=月, ... 5=金
+const PERIOD_MODES = { all: '全期間', month: '月別', week: '週別' };
+const parseDate = (d) => { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day); };
+const fmtDate = (dt) => dt.toLocaleDateString('sv-SE');
+const PERIODS = {
+  month: {
+    keyOf: (d) => d.slice(0, 7),
+    label: (k) => `${Number(k.slice(0, 4))}年${Number(k.slice(5))}月`,
+  },
+  week: {
+    keyOf: (d) => {
+      const dt = parseDate(d);
+      dt.setDate(dt.getDate() - ((dt.getDay() - WEEK_START_DAY + 7) % 7));
+      return fmtDate(dt);
+    },
+    label: (k) => {
+      const start = parseDate(k);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      // 今年の週は年を省略して短く表示する
+      const year = start.getFullYear() === new Date().getFullYear() ? '' : `${start.getFullYear()}/`;
+      return `${year}${start.getMonth() + 1}/${start.getDate()}〜${end.getMonth() + 1}/${end.getDate()}`;
+    },
+  },
+};
+let periodMode = 'all';
+
+$('period-modes').innerHTML = Object.entries(PERIOD_MODES).map(([k, v]) =>
+  `<label style="margin:0"><input type="radio" name="period-mode" value="${k}" ${k === periodMode ? 'checked' : ''}><span>${v}</span></label>`
+).join('');
+$('period-modes').addEventListener('change', (e) => {
+  periodMode = e.target.value;
+  $('period-select').value = '';
+  renderStats();
+});
+$('period-select').addEventListener('change', renderStats);
+
+function renderStats() {
+  const period = PERIODS[periodMode];
+  let list = records;
+  $('period-select').classList.toggle('hidden', !period);
+  $('period-trend-card').classList.toggle('hidden', !period);
+  if (period) {
+    // 記録のある期間を新しい順に。未選択なら最新の期間を表示
+    const keys = [...new Set(records.map((r) => period.keyOf(r.date)))].sort().reverse();
+    const selected = keys.includes($('period-select').value) ? $('period-select').value : keys[0];
+    $('period-select').innerHTML = keys.map((k) => `<option value="${k}">${period.label(k)}</option>`).join('');
+    $('period-select').value = selected ?? '';
+    list = records.filter((r) => period.keyOf(r.date) === selected);
+    $('period-trend-title').textContent = `${PERIOD_MODES[periodMode]}の推移`;
+    $('period-trend').innerHTML = crossTable(records, (r) => [period.keyOf(r.date)], (a, b) => b[0].localeCompare(a[0]), period.label);
+  }
+  $('total-count').textContent = `（合計 ${list.length} 件）`;
+  $('role-stats').innerHTML = ROLES.map((role) =>
+    `<div class="stat"><div class="n">${list.filter((r) => r.role === role).length}</div><div class="l">${role}</div></div>`
+  ).join('');
+  $('procedure-stats').innerHTML = crossTable(list, (r) => r.procedures || []);
+  // 到達法は組み合わせ（例: 腹腔鏡→開腹）ごとに集計する
+  $('approach-stats').innerHTML = crossTable(list, (r) => [approachText(r)]);
+  $('dept-stats').innerHTML = crossTable(list, (r) => [r.dept]);
+}
+
+// --- エクスポート / インポート ---
+function download(filename, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$('export-csv').addEventListener('click', () => {
+  const cols = [
+    ['手術日', (r) => r.date], ['診療科', (r) => r.dept], ['疾患', (r) => r.disease], ['術式', procedureText],
+    ['到達法', approachText], ['立場', (r) => r.role], ['メモ', (r) => r.memo],
+  ];
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [cols.map(([h]) => cell(h)).join(',')]
+    .concat(records.map((r) => cols.map(([, f]) => cell(f(r))).join(',')));
+  // BOM 付き UTF-8 にして Excel で文字化けしないようにする
+  download(`手術記録_${today()}.csv`, '﻿' + lines.join('\r\n'), 'text/csv');
+});
+
+$('export-json').addEventListener('click', () => {
+  download(`手術記録_backup_${today()}.json`, JSON.stringify(records, null, 2), 'application/json');
+});
+
+$('import-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    if (!Array.isArray(imported)) throw new Error();
+    const byId = new Map(records.map((r) => [r.id, r]));
+    imported.forEach((r) => r.id && r.date && byId.set(r.id, normalize(r)));
+    records = [...byId.values()];
+    sortRecords();
+    save(records);
+    refreshSuggestions();
+    toast(`${imported.length} 件を読み込みました`);
+  } catch {
+    toast('読み込みに失敗しました');
+  }
+  e.target.value = '';
+});
+
+refreshSuggestions();
+resetForm();
+</script>
+</body>
+</html>
