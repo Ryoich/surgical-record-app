@@ -28,8 +28,12 @@
   .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   label { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; }
   label:first-child { margin-top: 0; }
-  input, select, textarea { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid var(--border);
+  input, select, textarea { width: 100%; padding: 10px; font-size: 1rem; font-family: inherit; border: 1px solid var(--border);
                             border-radius: 8px; background: var(--bg); color: var(--text); }
+  /* iOS Safari の日付欄は独自スタイルで高さ・幅・文字位置がずれるため、他の入力欄に揃える */
+  input[type=date] { -webkit-appearance: none; appearance: none; display: block; min-height: 44px; text-align: left; }
+  input[type=date]::-webkit-date-and-time-value { text-align: left; }
+  .row > input { min-width: 0; }
   textarea { min-height: 60px; resize: vertical; }
   .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .roles input { display: none; }
@@ -95,13 +99,16 @@
       <label>診療科</label>
       <div class="roles" id="f-depts" style="grid-template-columns: repeat(2, 1fr)"></div>
 
-      <label for="f-disease">疾患</label>
-      <input id="f-disease" list="dl-disease" placeholder="例: 急性虫垂炎（下の経験済み疾患から選択も可）" required>
+      <label for="f-disease">疾患（複数選択可）</label>
+      <div class="row">
+        <input id="f-disease" list="dl-disease" placeholder="疾患を入力" style="flex:3">
+        <button type="button" class="btn secondary" id="add-disease" style="flex:1">追加</button>
+      </div>
       <div class="chips" id="disease-chips"></div>
 
       <label for="f-procedure">術式（複数選択可）</label>
       <div class="row">
-        <input id="f-procedure" list="dl-procedure" placeholder="新しい術式を入力 / 下から選択" style="flex:3">
+        <input id="f-procedure" list="dl-procedure" placeholder="術式を入力" style="flex:3">
         <button type="button" class="btn secondary" id="add-procedure" style="flex:1">追加</button>
       </div>
       <div class="chips" id="procedure-chips"></div>
@@ -195,10 +202,12 @@ const DEPTS = ['外科', '小児外科'];
 const APPROACHES = ['開腹', '腹腔鏡', 'ロボット'];
 
 const $ = (id) => document.getElementById(id);
-// 旧形式（術式・到達法が単一の文字列）の記録を配列形式に変換する
+// 旧形式（疾患・術式・到達法が単一の文字列）の記録を配列形式に変換する
 function normalize(r) {
+  if (!r.diseases) r.diseases = r.disease ? [r.disease] : [];
   if (!r.procedures) r.procedures = r.procedure ? [r.procedure] : [];
   if (!r.approaches) r.approaches = r.approach ? [r.approach] : [];
+  delete r.disease;
   delete r.procedure;
   delete r.approach;
   return r;
@@ -258,61 +267,35 @@ $('f-approaches').addEventListener('change', (e) => {
 });
 $('filter-role').innerHTML += ROLES.map((r) => `<option>${r}</option>`).join('');
 
-// 術式は複数選択可
-let selectedProcedures = [];
-function addProcedure() {
-  const v = $('f-procedure').value.trim();
-  if (v && !selectedProcedures.includes(v)) selectedProcedures.push(v);
-  $('f-procedure').value = '';
-  renderAllChips();
+// 疾患・術式は複数選択可。経験済みのものをボタンで表示する
+// （選択中の診療科のもの・件数の多い順、入力中の文字で絞り込み）
+const CHIP_FIELDS = [
+  { key: 'diseases', label: '疾患', inputId: 'f-disease', addId: 'add-disease', chipsId: 'disease-chips', datalistId: 'dl-disease', selected: [] },
+  { key: 'procedures', label: '術式', inputId: 'f-procedure', addId: 'add-procedure', chipsId: 'procedure-chips', datalistId: 'dl-procedure', selected: [] },
+];
+
+function addFromInput(field) {
+  const v = $(field.inputId).value.trim();
+  if (v && !field.selected.includes(v)) field.selected.push(v);
+  $(field.inputId).value = '';
+  renderChips(field);
 }
-$('add-procedure').addEventListener('click', addProcedure);
-$('f-procedure').addEventListener('keydown', (e) => {
-  // Enter でフォーム送信せず、入力中の術式を追加する
-  if (e.key === 'Enter' && !e.isComposing) {
-    e.preventDefault();
-    addProcedure();
-  }
-});
 
 function refreshSuggestions() {
-  const fill = (id, field) => {
-    const values = [...new Set(records.flatMap(field.valuesOf))].sort();
-    $(id).innerHTML = values.map((v) => `<option value="${esc(v)}">`).join('');
-  };
-  fill('dl-disease', CHIP_FIELDS[0]);
-  fill('dl-procedure', CHIP_FIELDS[1]);
+  CHIP_FIELDS.forEach((field) => {
+    const values = [...new Set(records.flatMap((r) => r[field.key] || []))].sort();
+    $(field.datalistId).innerHTML = values.map((v) => `<option value="${esc(v)}">`).join('');
+  });
   renderAllChips();
 }
-
-// 経験済みの疾患・術式をボタンで表示（選択中の診療科のもの・件数の多い順、入力中の文字で絞り込み）
-const CHIP_FIELDS = [
-  {
-    inputId: 'f-disease', chipsId: 'disease-chips',
-    valuesOf: (r) => (r.disease ? [r.disease] : []),
-    selected: () => [$('f-disease').value.trim()].filter(Boolean),
-    // 単一選択: 選択中のものをもう一度タップすると入力を消して一覧を全表示に戻す
-    toggle: (v) => ($('f-disease').value = $('f-disease').value.trim() === v ? '' : v),
-  },
-  {
-    inputId: 'f-procedure', chipsId: 'procedure-chips',
-    valuesOf: (r) => r.procedures || [],
-    selected: () => selectedProcedures,
-    toggle: (v) => {
-      selectedProcedures = selectedProcedures.includes(v)
-        ? selectedProcedures.filter((p) => p !== v)
-        : [...selectedProcedures, v];
-    },
-  },
-];
 
 function renderChips(field) {
   const dept = document.querySelector('input[name=dept]:checked')?.value;
   const query = $(field.inputId).value.trim().toLowerCase();
-  const selected = field.selected();
+  const selected = field.selected;
   const counts = {};
   records.filter((r) => !dept || r.dept === dept)
-    .forEach((r) => field.valuesOf(r).forEach((v) => (counts[v] = (counts[v] || 0) + 1)));
+    .forEach((r) => (r[field.key] || []).forEach((v) => (counts[v] = (counts[v] || 0) + 1)));
   // 新規入力で選択したもの（まだ履歴にないもの）も表示する
   selected.forEach((v) => (counts[v] ??= 0));
   const items = Object.entries(counts)
@@ -328,10 +311,19 @@ CHIP_FIELDS.forEach((field) => {
   $(field.chipsId).addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
-    field.toggle(chip.dataset.value);
+    const v = chip.dataset.value;
+    field.selected = field.selected.includes(v) ? field.selected.filter((x) => x !== v) : [...field.selected, v];
     renderChips(field);
   });
   $(field.inputId).addEventListener('input', () => renderChips(field));
+  $(field.addId).addEventListener('click', () => addFromInput(field));
+  $(field.inputId).addEventListener('keydown', (e) => {
+    // Enter でフォーム送信せず、入力中の値を追加する
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      addFromInput(field);
+    }
+  });
 });
 $('f-depts').addEventListener('change', renderAllChips);
 
@@ -342,7 +334,7 @@ function resetForm() {
   // 診療科は直前の記録を引き継ぐ（同じクール中は同じ科が続くため）
   setDept(DEPTS.includes(records[0]?.dept) ? records[0].dept : DEPTS[0]);
   setApproaches([]);
-  selectedProcedures = [];
+  CHIP_FIELDS.forEach((field) => (field.selected = []));
   $('f-submit').textContent = '保存';
   $('edit-actions').classList.add('hidden');
   renderAllChips();
@@ -355,9 +347,10 @@ function editRecord(id) {
   $('f-date').value = r.date;
   setDept(r.dept);
   setApproaches(r.approaches || []);
-  $('f-disease').value = r.disease;
-  $('f-procedure').value = '';
-  selectedProcedures = [...(r.procedures || [])];
+  CHIP_FIELDS.forEach((field) => {
+    $(field.inputId).value = '';
+    field.selected = [...(r[field.key] || [])];
+  });
   renderAllChips();
   $('f-memo').value = r.memo || '';
   document.querySelectorAll('input[name=role]').forEach((el) => (el.checked = el.value === r.role));
@@ -373,19 +366,21 @@ function sortRecords() {
 
 $('record-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  // 入力欄に残っている術式は追加し忘れとみなして含める
-  if ($('f-procedure').value.trim()) addProcedure();
-  if (!selectedProcedures.length) {
-    toast('術式を入力または選択してください');
-    $('f-procedure').focus();
-    return;
+  for (const field of CHIP_FIELDS) {
+    // 入力欄に残っている値は追加し忘れとみなして含める
+    if ($(field.inputId).value.trim()) addFromInput(field);
+    if (!field.selected.length) {
+      toast(`${field.label}を入力または選択してください`);
+      $(field.inputId).focus();
+      return;
+    }
   }
   const id = $('f-id').value;
   const data = {
     date: $('f-date').value,
     dept: document.querySelector('input[name=dept]:checked').value,
-    disease: $('f-disease').value.trim(),
-    procedures: [...selectedProcedures],
+    diseases: [...CHIP_FIELDS[0].selected],
+    procedures: [...CHIP_FIELDS[1].selected],
     approaches: [...selectedApproaches],
     role: document.querySelector('input[name=role]:checked').value,
     memo: $('f-memo').value.trim(),
@@ -417,6 +412,7 @@ $('f-delete').addEventListener('click', () => {
 });
 
 // --- 一覧 ---
+const diseaseText = (r) => (r.diseases || []).join('、');
 const procedureText = (r) => (r.procedures || []).join('、');
 const approachText = (r) => (r.approaches || []).join('→');
 
@@ -425,14 +421,14 @@ function renderList() {
   const role = $('filter-role').value;
   const filtered = records.filter((r) =>
     (!role || r.role === role) &&
-    (!q || [procedureText(r), r.disease, r.dept, approachText(r), r.memo].some((v) => (v || '').toLowerCase().includes(q)))
+    (!q || [procedureText(r), diseaseText(r), r.dept, approachText(r), r.memo].some((v) => (v || '').toLowerCase().includes(q)))
   );
   $('record-list').innerHTML = filtered.length
     ? filtered.map((r) => `
       <div class="record" data-id="${r.id}">
         <div>
           <div class="main">${esc(procedureText(r))}</div>
-          <div class="sub">${esc(r.date)}${r.dept ? ' ・ ' + esc(r.dept) : ''}${approachText(r) ? ' ・ ' + esc(approachText(r)) : ''} ・ ${esc(r.disease)}</div>
+          <div class="sub">${esc(r.date)}${r.dept ? ' ・ ' + esc(r.dept) : ''}${approachText(r) ? ' ・ ' + esc(approachText(r)) : ''} ・ ${esc(diseaseText(r))}</div>
         </div>
         <span class="badge ${r.role === '執刀医' ? 'r0' : ''}">${esc(r.role)}</span>
       </div>`).join('')
@@ -542,7 +538,7 @@ function download(filename, content, type) {
 
 $('export-csv').addEventListener('click', () => {
   const cols = [
-    ['手術日', (r) => r.date], ['診療科', (r) => r.dept], ['疾患', (r) => r.disease], ['術式', procedureText],
+    ['手術日', (r) => r.date], ['診療科', (r) => r.dept], ['疾患', diseaseText], ['術式', procedureText],
     ['到達法', approachText], ['立場', (r) => r.role], ['メモ', (r) => r.memo],
   ];
   const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
